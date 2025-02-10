@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Детекция авто на фото</title>
+    <link rel="stylesheet" href="/FastAPI-YOLO-App/staticcss">
+</head>
+<body>
+    <div class="center-container">
+        <h1>Детекция авто на фото</h1>
+
+        <label class="custom-file-upload">
+            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+            Выберите изображение
+        </label>
+
+        <div id="fileName" style="margin: 10px 0; font-weight: bold;"></div>
+
+        <div id="result" style="display: none;">
+            <div class="image-container">
+                <img id="processedImage" alt="Processed Image">
+                <button id="saveImageBtn">Сохранить изображение</button>
+            </div>
+
+            <h3>Bounding Boxes:</h3>
+            <table id="bboxesTable" border="1" cellpadding="5" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>x1</th>
+                        <th>y1</th>
+                        <th>x2</th>
+                        <th>y2</th>
+                        <th>Confidence</th>
+                        <th>Class ID</th>
+                        <th>Class Name</th>
+                    </tr>
+                </thead>
+                <tbody id="bboxesBody">
+
+                </tbody>
+            </table>
+
+            <div class="copy-bbox-container">
+                <button id="copyBBoxesBtn">Скопировать bbox</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('imageInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+
+            if (!file) {
+                alert('Выберите изображение');
+                return;
+            }
+
+            document.getElementById('fileName').textContent = file.name;
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const imageBase64 = event.target.result.split(',')[1];
+                const response = await fetch('/process_image/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: imageBase64 }),
+                });
+
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                document.getElementById('processedImage').src = `data:image/png;base64,${data.image}`;
+
+                const bboxesBody = document.getElementById('bboxesBody');
+                bboxesBody.innerHTML = '';
+
+                data.bboxes.forEach((bbox, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td>${bbox.x1}</td>
+                        <td>${bbox.y1}</td>
+                        <td>${bbox.x2}</td>
+                        <td>${bbox.y2}</td>
+                        <td>${bbox.confidence.toFixed(2)}</td>
+                        <td>${bbox.class_id}</td>
+                        <td>${bbox.class_name}</td>
+                    `;
+                    bboxesBody.appendChild(row);
+                });
+
+                document.getElementById('result').style.display = 'block';
+
+                const bboxesJson = JSON.stringify(data.bboxes, null, 2);
+                document.getElementById('copyBBoxesBtn').dataset.bboxes = bboxesJson;
+
+                document.getElementById('saveImageBtn').dataset.originalFileName = file.name;
+            };
+
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById('saveImageBtn').addEventListener('click', () => {
+            const processedImage = document.getElementById('processedImage');
+            const originalFileName = document.getElementById('saveImageBtn').dataset.originalFileName;
+
+            const fileNameParts = originalFileName.split('.');
+            const fileExtension = fileNameParts.pop();
+            const newFileName = fileNameParts.join('.') + '_processed.' + fileExtension;
+
+            const link = document.createElement('a');
+            link.href = processedImage.src;
+            link.download = newFileName;
+            link.click();
+        });
+
+        document.getElementById('copyBBoxesBtn').addEventListener('click', () => {
+            const bboxesJson = document.getElementById('copyBBoxesBtn').dataset.bboxes;
+            navigator.clipboard.writeText(bboxesJson).then(() => {
+                alert('Bounding boxes скопированы в буфер обмена!');
+            }).catch(err => {
+                console.error('Не удалось скопировать боксы: ', err);
+                alert('Ошибка при копировании. Попробуйте еще раз.');
+            });
+        });
+    </script>
+</body>
+</html>

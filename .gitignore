@@ -1,0 +1,6 @@
+./.venv
+zametki.txt
+requirements_old.txt
+test.py
+best_old.onnx
+.idea
